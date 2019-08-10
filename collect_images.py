@@ -11,7 +11,9 @@ import urllib.parse
 TIMEOUT=3
 RETRY=3
 
-IMAGE_DIR = "images/"
+DATA_DIR = "data"
+IMAGE_DIR = os.path.join(DATA_DIR, "images")
+LABEL_PATH = os.paht.join(DATA_DIR, "label.pkl")
 
 @tenacity.retry(retry=tenacity.retry_if_exception_type(asyncio.TimeoutError), stop=tenacity.stop_after_attempt(RETRY))
 async def fetch_img(url, sess):
@@ -39,7 +41,7 @@ async def record(url, sess, fp):
 
 
 async def collect(max_num=1):
-    with open("dt", "a+b") as fp:
+    with open(LABEL_PATH, "a+b") as fp:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as sess:
             return await tool.limited_api(
                     [record(f"https://danbooru.donmai.us/posts/{i}", sess, fp)
