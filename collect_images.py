@@ -5,6 +5,7 @@ import lxml.html
 import tenacity
 import os
 import pickle
+import socket
 import tool
 import urllib.parse
 
@@ -13,7 +14,7 @@ RETRY=3
 
 DATA_DIR = "data"
 IMAGE_DIR = os.path.join(DATA_DIR, "images")
-LABEL_PATH = os.paht.join(DATA_DIR, "label.pkl")
+LABEL_PATH = os.path.join(DATA_DIR, "label.pkl")
 
 @tenacity.retry(retry=tenacity.retry_if_exception_type(asyncio.TimeoutError), stop=tenacity.stop_after_attempt(RETRY))
 async def fetch_img(url, sess):
@@ -27,20 +28,30 @@ async def fetch_img(url, sess):
 @tenacity.retry(retry=tenacity.retry_if_exception_type(asyncio.TimeoutError), stop=tenacity.stop_after_attempt(RETRY))
 async def fetch(url, sess):
     async with sess.get(url) as res:
-        parsed = lxml.html.fromstring(await res.text())
+        r = await res.text()
+        print(r)
+        parsed = lxml.html.fromstring(r)
         tags = {ul.getprevious().text: [i.text for i in ul.xpath(".//a[@class='search-tag']")]
                 for ul in parsed.xpath("//aside/section[@id='tag-list']/ul")}
         url = parsed.xpath("//section[@id='image-container']")[0].get("data-file-url")
         return (url, tags)
 
 async def record(url, sess, fp):
-    url, tags = await fetch(url, sess)
-    if not url: return None
-    path = await fetch_img(url, sess)
-    pickle.dump((path, tags), fp)
+    try:
+        url, tags = await fetch(url, sess)
+        if not url: return None
+        path = await fetch_img(url, sess)
+        pickle.dump((path, tags), fp)
+    except Exception as e:
+        print(e)
 
 
 async def collect(max_num=1):
+    conn = aiohttp.TCPConnector(
+            limit=32,
+            family=socket.AF_INET,
+            verify_ssl=False,
+            )
     with open(LABEL_PATH, "a+b") as fp:
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=TIMEOUT)) as sess:
             return await tool.limited_api(
@@ -49,7 +60,7 @@ async def collect(max_num=1):
 
 def main():
     loop = asyncio.get_event_loop()
-    print(loop.run_until_complete(collect(3)))
+    print(loop.run_until_complete(collect(10)))
 
 if __name__ == "__main__":
     main()
